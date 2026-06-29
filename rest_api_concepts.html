@@ -1,0 +1,441 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>REST API Concepts — Methods, Status Codes & Architecture</title>
+<style>
+  :root{
+    --ink:#0f1118;--ink2:#161a26;--panel:#1a1f2e;--line:#2a3245;
+    --indigo:#8b7ff0;--indigo-dim:#5f55a8;--parch:#e9e7f2;--muted:#99a0b5;
+    --pass:#5ad1c4;--fail:#e0667a;--warn:#e8b54a;--code-bg:#0b0d14;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;--sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--ink);color:var(--parch);font-family:var(--sans);line-height:1.55;font-size:15px}
+  .wrap{max-width:1080px;margin:0 auto;padding:26px 20px 90px}
+  .eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.22em;color:var(--indigo);text-transform:uppercase}
+  h1{font-family:var(--mono);font-weight:600;font-size:28px;margin:.3em 0 .1em}
+  h2{font-family:var(--mono);font-size:18px;border-left:3px solid var(--indigo);padding-left:12px;margin:34px 0 10px}
+  h3{font-family:var(--mono);font-size:14px;color:var(--indigo);margin:18px 0 6px}
+  code,kbd{font-family:var(--mono);background:var(--code-bg);border:1px solid var(--line);border-radius:5px;padding:1px 6px;font-size:.9em}
+  .muted{color:var(--muted)} .small{font-size:13px}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px 18px;margin:14px 0}
+  pre{font-family:var(--mono);font-size:13px;background:var(--code-bg);border:1px solid var(--line);border-radius:8px;padding:14px;overflow:auto;white-space:pre}
+  button{font-family:var(--mono);font-size:13px;background:var(--indigo);color:#13101f;border:0;border-radius:7px;padding:9px 15px;cursor:pointer;font-weight:600}
+  button.ghost{background:transparent;color:var(--indigo);border:1px solid var(--indigo-dim)}
+  input[type=text],textarea{font-family:var(--mono);background:var(--code-bg);border:1px solid var(--line);color:var(--parch);border-radius:7px;padding:9px 12px;font-size:13px}
+  input[type=text]{width:100%}
+  textarea{width:100%;resize:vertical}
+  button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--indigo);outline-offset:2px}
+  .hidden{display:none!important}
+  .chip{display:inline-block;background:var(--ink2);border:1px solid var(--line);border-radius:7px;padding:6px 10px;font-family:var(--mono);margin:3px}
+  .chip b{color:var(--indigo)}
+  .verdict{font-family:var(--mono);font-size:13px;margin-top:8px}
+  .ok{color:var(--pass)} .no{color:var(--fail)} .wn{color:var(--warn)}
+  .check{display:flex;gap:10px;padding:6px 0;border-bottom:1px dashed var(--line)}
+  .check:last-child{border-bottom:0}
+  .dot{font-family:var(--mono);width:24px;text-align:center;font-weight:700}
+  details{border:1px solid var(--line);border-radius:8px;padding:6px 12px;margin:14px 0;background:var(--ink2)}
+  summary{cursor:pointer;font-family:var(--mono);color:var(--muted)}
+  hr{border:0;border-top:1px solid var(--line);margin:28px 0}
+  .pts{color:var(--muted);font-family:var(--mono);font-size:12px}
+  .telemetry{font-family:var(--mono);font-size:12px;color:var(--muted)}
+  label.fld{display:block;font-family:var(--mono);font-size:12px;color:var(--muted);margin:10px 0 4px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Onboarding · Interactive Assessment</div>
+    <h1>REST API Concepts</h1>
+    <p class="muted">Methods, Status Codes &amp; Architecture · <b>90-minute timed session</b> · identify status codes, build resource wrappers, defend architectural decisions. Your tokens and values are generated from your name. <b>Pasting is disabled in the answer boxes, the session is timed (the clock keeps running even if you refresh), and interaction telemetry is recorded for integrity.</b> When the timer hits zero your submission PDF is generated automatically. Work it yourself — you'll also be cross-questioned live afterwards.</p>
+  </header>
+
+  <section id="gate" class="panel">
+    <h3>Step 0 — Identify yourself</h3>
+    <p class="small muted">Type your <b>full name</b> exactly as your reviewer has it. Browser-only, nothing uploaded.</p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <input id="nameInput" type="text" placeholder="e.g. Sam Carter" style="flex:1 1 260px"/>
+      <button id="startBtn">Begin</button>
+    </div>
+    <div id="startErr" class="no" style="font-family:var(--mono);font-size:12px;margin-top:8px"></div>
+  </section>
+
+  <main id="body" class="hidden">
+    <div id="timerBar" style="position:sticky;top:0;z-index:50;background:#11141d;border:1px solid var(--line);border-radius:10px;padding:10px 16px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+      <span class="telemetry">Session <b id="sidShort" style="color:var(--indigo)">—</b></span>
+      <span style="font-family:var(--mono);font-size:16px">Time remaining: <b id="clock" style="color:var(--pass)">90:00</b></span>
+    </div>
+    <section class="panel">
+      <h3>Your seed <span class="muted small">— these values are yours; use them where asked</span></h3>
+      <div id="specView"></div>
+    </section>
+
+    <h2>Round A — Identify the Flow <span class="pts">· 40 pts · seeded · interactive</span></h2>
+    <p class="small">For each scenario: type your <b>predicted sequence of HTTP status codes</b> (separated by spaces, e.g. <code>200 404 500</code>), then <b>Run &amp; verify</b>. Predict <i>before</i> you run — the box locks once you run. Then answer the cross-question. <span class="muted">Pasting is disabled in the answer boxes.</span></p>
+    <div id="roundA"></div>
+
+    <hr/>
+    <h2>Round B — Build the wrappers <span class="pts">· 35 pts · auto-checked</span></h2>
+    <p class="small">Write the five functions below to interact with a mock API. A global <code>fetch(url, options)</code> wrapper is already provided. It returns a Promise that resolves to <code>{ status, json() }</code>. Click <b>Run checks</b>.</p>
+    <ul class="small">
+      <li><b>B1 <span class="pts">7</span></b> — <code>getToken()</code>: Perform a GET request to <code>/api/token</code>. Return the <code>token</code> property from the JSON response. Must resolve to <b id="bv1"></b>.</li>
+      <li><b>B2 <span class="pts">7</span></b> — <code>createItem(data)</code>: Perform a POST to <code>/api/items</code>. Pass the data (don't worry about headers/stringifying for this mock). Return the <code>id</code> from the JSON response. Must resolve to <b id="bv2"></b>.</li>
+      <li><b>B3 <span class="pts">7</span></b> — <code>updateItem(id, data)</code>: Perform a PATCH to <code>/api/items/{id}</code>. Return the HTTP <code>status</code> code.</li>
+      <li><b>B4 <span class="pts">7</span></b> — <code>deleteItem(id)</code>: Perform a DELETE to <code>/api/items/{id}</code>. Return the boolean <code>true</code> if the status code is 204, otherwise return <code>false</code>.</li>
+      <li><b>B5 <span class="pts">7</span></b> — <code>fetchWithRetry()</code>: Perform a GET to <code>/api/flaky</code>. If it returns a 503 status code, immediately retry the request <b>exactly once</b>. Return the final HTTP <code>status</code> code.</li>
+    </ul>
+    <div style="display:flex;gap:18px;flex-wrap:wrap">
+      <div style="flex:1 1 460px;min-width:320px">
+        <label class="fld">your code</label>
+        <textarea id="bcode" rows="16" spellcheck="false" placeholder="async function getToken(){ /* ... */ }
+async function createItem(data){ /* ... */ }
+async function updateItem(id, data){ /* ... */ }
+async function deleteItem(id){ /* ... */ }
+async function fetchWithRetry(){ /* ... */ }"></textarea>
+        <div style="margin-top:10px;display:flex;gap:10px;align-items:center">
+          <button id="runB">▶ Run checks</button>
+          <span id="bErr" class="no telemetry"></span>
+        </div>
+      </div>
+      <div style="flex:1 1 240px">
+        <label class="fld">results</label>
+        <div class="panel" style="margin-top:0"><div id="bChecks"></div><div class="verdict" id="bTally">— / 5</div></div>
+      </div>
+    </div>
+
+    <hr/>
+    <h2>Round C — Architecture &amp; Constraints <span class="pts">· 25 pts · written</span></h2>
+    <p class="small">Reason it out in your own words. These are graded on the <i>why</i>, and revisited live. <span class="muted">Pasting is disabled in these boxes.</span></p>
+
+    <h3>C1 <span class="pts">8</span> — PUT vs PATCH</h3>
+    <p class="small">You need to update only the email address of a user object containing 20 fields. Explain whether you should use PUT or PATCH, what the request payload should look like for each, and how the concept of <i>idempotency</i> applies to both methods.</p>
+    <textarea id="c1" rows="5"></textarea>
+
+    <h3>C2 <span class="pts">8</span> — Statelessness</h3>
+    <p class="small">A developer stores a user's <code>current_step_in_checkout</code> in the server's memory, relying on a session cookie to map the user to that variable. Explain <b>why</b> this violates the REST "stateless" constraint, and explain how the system should be refactored to comply.</p>
+    <textarea id="c2" rows="4"></textarea>
+
+    <h3>C3 <span class="pts">9</span> — Over-fetching &amp; Endpoints</h3>
+    <p class="small">A mobile app needs a user's name and their top 3 recent order IDs. The current REST API requires calling <code>GET /users/123</code> (which returns 50 fields) and then <code>GET /users/123/orders</code> (which returns 500 complete order objects). Name the performance issues happening here, and propose a RESTful solution to optimize it.</p>
+    <textarea id="c3" rows="4"></textarea>
+
+    <hr/>
+    <h2>Finish — generate &amp; export</h2>
+    <p class="small">Generate your completion code, then build &amp; download your submission. A signed <b>PDF downloads automatically</b> and the same text appears below — submit the PDF.</p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <button id="codeBtn" class="ghost">Generate completion code</button>
+      <button id="exportBtn">Build &amp; download submission PDF</button>
+    </div>
+    <div id="codeOut" class="panel small hidden" style="font-family:var(--mono)"></div>
+    <pre id="exportOut" class="hidden"></pre>
+
+    <details>
+      <summary>Reviewer tools (for your manager)</summary>
+      <p class="small muted">1) Verify a completion code against a name (confirms seed + integrity, decodes which A/B items passed).</p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+        <input id="vName" type="text" placeholder="intern name" style="flex:1 1 180px"/>
+        <input id="vCode" type="text" placeholder="completion code" style="flex:1 1 220px"/>
+        <button id="vBtn" class="ghost">Verify code</button>
+      </div>
+      <div id="vOut" class="small telemetry" style="margin-top:10px"></div>
+      <p class="small muted" style="margin-top:14px">2) Check a submission wasn't edited after generation: paste the intern's name and the <b>full submission text</b> (copy it out of their PDF, including the "Integrity signature" line).</p>
+      <input id="iName" type="text" placeholder="intern name" style="margin-bottom:8px"/>
+      <textarea id="iText" rows="5" placeholder="paste the entire submission block here"></textarea>
+      <div style="margin-top:8px"><button id="iBtn" class="ghost">Check integrity</button></div>
+      <div id="iOut" class="small telemetry" style="margin-top:10px"></div>
+    </details>
+  </main>
+</div>
+
+<script>
+/* ===================== seeded core ===================== */
+function seedFromName(name){const s=String(name).toUpperCase().replace(/[^A-Z]/g,"");let h=2166136261>>>0;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)>>>0;}return h>>>0;}
+function mulberry32(a){return function(){a|=0;a=(a+0x6D2B79F5)|0;let t=Math.imul(a^(a>>>15),1|a);t=(t+Math.imul(t^(t>>>7),61|t))^t;return((t^(t>>>14))>>>0)/4294967296;};}
+function shuffle(arr,r){const a=arr.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(r()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
+function buildSpec(name){const seed=seedFromName(name);const r=mulberry32(seed);const labels=shuffle(["ZAP","BOLT","FIZZ","GLOW","HALO","JOLT","KILN","LUME","MYNX","NOVA","ONYX","PYRE","QUIRK","RUNE","SAGE","TIDE"],r).slice(0,16);const V1=100+(seed%900),V2=50+((seed>>>3)%400);return {seed,labels,V1,V2};}
+
+function snippets(L){return [
+ {id:'A1',code:`1. Client requests resource '${L[0]}' which does not exist.\n2. Client successfully creates resource '${L[0]}'.\n3. Client fetches the newly created resource '${L[0]}'.`,
+  cross:`Why use 201 instead of 200 for the second action?`, answer: `404 201 200`},
+ {id:'A2',code:`1. Client attempts to delete '${L[1]}' without an Authorization header.\n2. Client provides valid token, but lacks admin rights to delete '${L[1]}'.\n3. Client provides admin token and successfully deletes '${L[1]}' (returning no body data).`,
+  cross:`Explain the strict difference between the first two status codes in this scenario.`, answer: `401 403 204`},
+ {id:'A3',code:`1. Client submits malformed JSON to update '${L[2]}'.\n2. Client sends 10,000 requests in a minute and is rate-limited.\n3. The server crashes due to an unhandled exception while processing '${L[2]}'.`,
+  cross:`Which of these represents a client-side error vs a server-side error, and how do the numerical code ranges reflect this?`, answer: `400 429 500`},
+ {id:'A4',code:`1. The endpoint for '${L[3]}' has been permanently moved to a new URL.\n2. Client fetches '${L[3]}' but it hasn't changed since the ETag provided by the client.\n3. Client successfully fetches '${L[3]}' normally without cache headers.`,
+  cross:`How does the second response save bandwidth compared to the third?`, answer: `301 304 200`}
+];}
+
+function helpers(V1,V2){return `
+let flakyCount = 0;
+function fetch(url, opts={}) {
+    const method = (opts.method || 'GET').toUpperCase();
+    return new Promise((resolve) => {
+        setTimeout(() => {
+            if(method==='GET' && url==='/api/token') return resolve({status:200, json:()=>Promise.resolve({token: ${V1}})});
+            if(method==='POST' && url==='/api/items') return resolve({status:201, json:()=>Promise.resolve({id: ${V2}})});
+            if(method==='PATCH' && url==='/api/items/1') return resolve({status:200, json:()=>Promise.resolve({updated: true})});
+            if(method==='DELETE' && url.startsWith('/api/items/')) {
+                const id = url.split('/').pop();
+                return resolve({status: id === '1' ? 204 : 404});
+            }
+            if(method==='GET' && url==='/api/flaky') {
+                 flakyCount++;
+                 if(flakyCount===1) return resolve({status:503});
+                 return resolve({status:200, json:()=>Promise.resolve({ok:true})});
+            }
+            resolve({status: 404});
+        }, 5);
+    });
+}
+`;}
+
+function buildAPI(internCode,V1,V2){
+  const wrapped=helpers(V1,V2)+'\n'+internCode+'\nreturn {getToken:typeof getToken!=="undefined"?getToken:undefined,createItem:typeof createItem!=="undefined"?createItem:undefined,updateItem:typeof updateItem!=="undefined"?updateItem:undefined,deleteItem:typeof deleteItem!=="undefined"?deleteItem:undefined,fetchWithRetry:typeof fetchWithRetry!=="undefined"?fetchWithRetry:undefined};';
+  return new Function(wrapped)();
+}
+
+async function checkB(api,V1,V2){
+  const res={};
+  try{ res.B1 = (await api.getToken()) === V1; }catch(e){ res.B1=false; }
+  try{ res.B2 = (await api.createItem({name:'test'})) === V2; }catch(e){ res.B2=false; }
+  try{ res.B3 = (await api.updateItem(1, {name:'bob'})) === 200; }catch(e){ res.B3=false; }
+  try{ res.B4 = (await api.deleteItem(1)) === true && (await api.deleteItem(99)) === false; }catch(e){ res.B4=false; }
+  try{ res.B5 = (await api.fetchWithRetry()) === 200; }catch(e){ res.B5=false; }
+  return res;
+}
+
+/* completion code: mask = (roundA<<5)|roundB */
+function codeHash(seed,mask){let h=2166136261>>>0;for(const v of [seed>>>0,mask>>>0,(seed^0x9E3779B9)>>>0]){h^=v;h=Math.imul(h,16777619)>>>0;}return h>>>0;}
+function genCode(seed,mask){return seed.toString(36)+"-"+mask.toString(36)+"-"+codeHash(seed,mask).toString(36);}
+function verifyCode(name,code){try{const seed=seedFromName(name);const p=String(code).trim().split("-");const sC=parseInt(p[0],36),mC=parseInt(p[1],36),hC=parseInt(p[2],36);const ok=(sC>>>0)===seed&&(hC>>>0)===codeHash(sC,mC);const rA=(mC>>5)&15,rB=mC&31;const aBits=[],bBits=[];for(let i=0;i<4;i++)if(rA&(1<<i))aBits.push('A'+(i+1));for(let i=0;i<5;i++)if(rB&(1<<i))bBits.push('B'+(i+1));return {ok,seedMatch:(sC>>>0)===seed,aBits,bBits};}catch(e){return {ok:false,error:String(e)};}}
+
+/* ===================== integrity signature + PDF ===================== */
+function strHash(s){let h=2166136261>>>0;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)>>>0;}return h>>>0;}
+function normWS(s){return String(s).replace(/\s+/g,' ').trim();}
+function signBody(seed,body){return (strHash(seed.toString(36)+'|'+normWS(body))>>>0).toString(36);}
+function verifySigText(seed,text){const m=text.match(/Integrity signature:\s*([0-9a-z]+)/i);if(!m)return {found:false};const body=text.slice(0,m.index);return {found:true,ok:signBody(seed,body)===m[1],expected:signBody(seed,body),got:m[1]};}
+function makePDF(text){
+  const W=612,H=792,ML=50,MT=750,LH=12,FS=9,maxChars=92,linesPerPage=57;
+  const clean=String(text).replace(/[\u2014\u2013]/g,'-').replace(/[\u2018\u2019]/g,"'").replace(/[\u201c\u201d]/g,'"').replace(/\u2026/g,'...').replace(/\r/g,'');
+  const rawLines=clean.split('\n'),lines=[];
+  for(const rl of rawLines){let s=rl.replace(/[^\x20-\x7e]/g,'?');if(s.length===0){lines.push('');continue;}while(s.length>maxChars){lines.push(s.slice(0,maxChars));s=s.slice(maxChars);}lines.push(s);}
+  const pages=[];for(let i=0;i<lines.length;i+=linesPerPage)pages.push(lines.slice(i,i+linesPerPage));if(pages.length===0)pages.push(['']);
+  const esc=s=>s.replace(/\\/g,'\\\\').replace(/\(/g,'\\(').replace(/\)/g,'\\)');
+  let num=4;const pageNums=[],contNums=[],contStr=[];
+  for(const pg of pages){const pn=num++,cn=num++;pageNums.push(pn);contNums.push(cn);let cs='BT /F1 '+FS+' Tf '+ML+' '+MT+' Td '+LH+' TL\n';pg.forEach(ln=>{cs+='('+esc(ln)+') Tj T*\n';});cs+='ET';contStr.push(cs);}
+  let pdf='%PDF-1.4\n';const off=[];
+  const add=(n,b)=>{off[n]=pdf.length;pdf+=n+' 0 obj\n'+b+'\nendobj\n';};
+  add(1,'<< /Type /Catalog /Pages 2 0 R >>');
+  add(2,'<< /Type /Pages /Kids ['+pageNums.map(n=>n+' 0 R').join(' ')+'] /Count '+pageNums.length+' >>');
+  add(3,'<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>');
+  for(let i=0;i<pages.length;i++){add(pageNums[i],'<< /Type /Page /Parent 2 0 R /MediaBox [0 0 '+W+' '+H+'] /Resources << /Font << /F1 3 0 R >> >> /Contents '+contNums[i]+' 0 R >>');const cs=contStr[i];add(contNums[i],'<< /Length '+cs.length+' >>\nstream\n'+cs+'\nendstream');}
+  const xref=pdf.length,total=num;
+  pdf+='xref\n0 '+total+'\n0000000000 65535 f \n';
+  for(let n=1;n<total;n++)pdf+=String(off[n]||0).padStart(10,'0')+' 00000 n \n';
+  pdf+='trailer\n<< /Size '+total+' /Root 1 0 R >>\nstartxref\n'+xref+'\n%%EOF';
+  const bytes=new Uint8Array(pdf.length);for(let i=0;i<pdf.length;i++)bytes[i]=pdf.charCodeAt(i)&0xff;return bytes;
+}
+function downloadBytes(name,bytes,mime){const blob=new Blob([bytes],{type:mime});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(url);a.remove();},150);}
+
+/* ===================== telemetry ===================== */
+const TELE={}; let awayCount=0, awayMs=0, awaySince=null;
+function now(){return Date.now();}
+function startAway(){ if(awaySince===null) awaySince=now(); }
+function endAway(){ if(awaySince!==null){ awayCount++; awayMs+=now()-awaySince; awaySince=null; } }
+window.addEventListener('blur',startAway); window.addEventListener('focus',endAway);
+document.addEventListener('visibilitychange',()=>{ document.hidden?startAway():endAway(); });
+let _toast=null;
+function flashNote(msg){
+  if(!_toast){_toast=document.createElement('div');_toast.style.cssText='position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:#2a1f2e;color:#e0667a;border:1px solid #e0667a;border-radius:8px;padding:9px 16px;font-family:var(--mono);font-size:13px;z-index:9999;box-shadow:0 6px 24px rgba(0,0,0,.4);transition:opacity .25s;opacity:0';document.body.appendChild(_toast);}
+  _toast.textContent=msg; _toast.style.opacity='1';
+  clearTimeout(_toast._t); _toast._t=setTimeout(()=>{_toast.style.opacity='0';},1600);
+}
+function instrument(id, block){
+  const el=document.getElementById(id); if(!el||TELE[id])return;
+  TELE[id]={first:null,last:null,keys:0,pastes:0,pasteChars:0,blocked:0,locked:!!block};
+  el.addEventListener('paste',e=>{
+    if(block){ e.preventDefault(); TELE[id].blocked++; mark(id); flashNote('Pasting is disabled here — type your answer.'); return; }
+    let t='';try{t=(e.clipboardData||window.clipboardData).getData('text')||'';}catch(_){ }
+    TELE[id].pastes++; TELE[id].pasteChars+=t.length; mark(id);
+    if(t.length>40) flashNote('Large paste recorded.');
+  });
+  if(block){
+    el.addEventListener('drop',e=>{ e.preventDefault(); TELE[id].blocked++; mark(id); flashNote('Drag-and-drop is disabled here.'); });
+    el.addEventListener('dragover',e=>e.preventDefault());
+  }
+  el.addEventListener('input',e=>{ if(e.inputType&&String(e.inputType).indexOf('Paste')>=0){mark(id);return;} TELE[id].keys++; mark(id); });
+}
+function mark(id){const t=now();if(!TELE[id].first)TELE[id].first=t;TELE[id].last=t;}
+function fieldSignal(id){const f=TELE[id];if(!f||(!f.keys&&!f.pastes&&!f.blocked))return {tag:'—',line:'untouched'};const secs=f.first?Math.round((f.last-f.first)/1000):0;const pasted=f.pasteChars>20&&f.keys<5;const extra=f.blocked?` · ${f.blocked} BLOCKED paste/drop`:'';return {tag:pasted?'PASTE':'typed',line:`${secs}s · ${f.keys} keystrokes · ${f.pastes} paste(${f.pasteChars}ch)${extra}`,pasted,blocked:f.blocked};}
+
+/* ===================== UI ===================== */
+let SPEC=null, SNIPS=null, aMask=0, bMask=0, lastB=null, predBeforeRun={};
+const $=s=>document.querySelector(s), $$=s=>document.getElementById(s);
+
+/* ---- session + persistent timer ---- */
+const DURATION=90*60*1000;
+let SESSION=null, SESSION_KEY=null, timerHandle=null, finished=false;
+function makeSessionId(seed,start){return seed.toString(36)+'.'+start.toString(36)+'.'+codeHash(seed,start).toString(36);}
+function verifySession(name,sid){try{const seed=seedFromName(name);const p=String(sid).trim().split('.');const sC=parseInt(p[0],36),tC=parseInt(p[1],36),hC=parseInt(p[2],36);return {ok:(sC>>>0)===seed&&(hC>>>0)===codeHash(sC,tC),seedMatch:(sC>>>0)===seed,start:new Date(tC)};}catch(e){return {ok:false,error:String(e)};}}
+function loadSession(seed){try{return JSON.parse(localStorage.getItem('restAssess:'+seed.toString(36))||'null');}catch(e){return null;}}
+function saveSession(){try{localStorage.setItem(SESSION_KEY,JSON.stringify(SESSION));}catch(e){}}
+function fmt(ms){if(ms<0)ms=0;const t=Math.floor(ms/1000);return String(Math.floor(t/60)).padStart(2,'0')+':'+String(t%60).padStart(2,'0');}
+function startTimer(){
+  if(timerHandle)clearInterval(timerHandle);
+  const tick=()=>{
+    const remaining=DURATION-(Date.now()-SESSION.start);
+    const c=$$('clock');
+    if(remaining<=0){ if(c){c.textContent='00:00';c.style.color='var(--fail)';} clearInterval(timerHandle); autoFinish(); return; }
+    if(c){ c.textContent=fmt(remaining); c.style.color = remaining<5*60*1000?'var(--fail)':(remaining<15*60*1000?'var(--warn)':'var(--pass)'); }
+  };
+  tick(); timerHandle=setInterval(tick,1000);
+}
+function freezeInputs(){
+  document.querySelectorAll('#body input, #body textarea, #body button').forEach(el=>{ if(el.id!=='vBtn'&&el.id!=='vName'&&el.id!=='vCode'&&el.id!=='iBtn'&&el.id!=='iName'&&el.id!=='iText') el.setAttribute('disabled','true'); });
+}
+function autoFinish(){
+  if(finished)return; finished=true;
+  if(SESSION){ SESSION.ended=true; SESSION.submitted=Date.now(); saveSession(); }
+  freezeInputs();
+  const bar=$$('timerBar'); if(bar){ bar.style.borderColor='var(--fail)'; bar.insertAdjacentHTML('beforeend','<span class="no" style="font-family:var(--mono)">⏱ Time is up — submission PDF generated automatically.</span>'); }
+  doExport(true);
+}
+
+$('#startBtn').addEventListener('click',()=>{
+ try{
+  const name=$('#nameInput').value.trim(); if(!name){$('#nameInput').focus();return;}
+  window.__NAME=name; SPEC=buildSpec(name); SNIPS=snippets(SPEC.labels);
+  SESSION_KEY='restAssess:'+SPEC.seed.toString(36);
+  SESSION=loadSession(SPEC.seed);
+  if(!SESSION){ const start=Date.now(); SESSION={sid:makeSessionId(SPEC.seed,start),start,name,ended:false}; saveSession(); }
+  $$('sidShort').textContent=SESSION.sid;
+  $('#specView').innerHTML=
+    `<span class="chip">token pool: <b>${SPEC.labels.slice(0,8).join(' ')}…</b></span>`+
+    `<span class="chip">B-value V1: <b>${SPEC.V1}</b></span>`+
+    `<span class="chip">B-value V2: <b>${SPEC.V2}</b></span>`+
+    `<span class="chip">checksum: <b>${SPEC.seed.toString(36)}</b></span>`;
+  $$('bv1').textContent=SPEC.V1; $$('bv2').textContent=SPEC.V2;
+  renderRoundA();
+  instrument('bcode', true); ['c1','c2','c3'].forEach(id=>instrument(id, true));
+  $('#gate').classList.add('hidden'); $('#body').classList.remove('hidden');
+  try{ window.scrollTo({top:0}); }catch(_){}
+  startTimer();
+ }catch(err){
+  const e=$('#startErr'); if(e) e.textContent='Could not start: '+err.message+'. If you are viewing this inside a preview pane, download the .html file and open it directly in Chrome/Firefox/Edge.';
+  try{console.error(err);}catch(_){}
+ }
+});
+
+function renderRoundA(){
+  const wrap=$('#roundA'); wrap.innerHTML='';
+  SNIPS.forEach((s,idx)=>{
+    const div=document.createElement('div'); div.className='panel';
+    div.innerHTML=
+      `<h3>${s.id} <span class="pts">10</span></h3>`+
+      `<pre style="white-space:pre-wrap;font-family:var(--sans);font-size:14px;background:transparent;border:none;padding:0">${s.code.replace(/</g,'&lt;')}</pre>`+
+      `<label class="fld">predicted HTTP status codes (space separated)</label>`+
+      `<input type="text" id="${s.id}pred" placeholder="e.g. 200 404 500"/>`+
+      `<div style="margin-top:8px;display:flex;gap:10px;align-items:center"><button data-i="${idx}" class="runA ghost">▶ Run &amp; verify</button><span class="verdict" id="${s.id}verd"></span></div>`+
+      `<label class="fld">cross-question — ${s.cross}</label>`+
+      `<textarea id="${s.id}why" rows="2"></textarea>`;
+    wrap.appendChild(div);
+    instrument(s.id+'pred', true); instrument(s.id+'why', true);
+  });
+  document.querySelectorAll('.runA').forEach(b=>b.addEventListener('click',()=>runA(+b.dataset.i)));
+}
+
+async function runA(i){
+  const s=SNIPS[i]; const pred=$('#'+s.id+'pred').value.trim();
+  if(predBeforeRun[s.id]===undefined) predBeforeRun[s.id]=pred.length>0;
+  $('#'+s.id+'pred').setAttribute('readonly','true');
+  const correct = pred.replace(/[^0-9]/g,'') === s.answer.replace(/[^0-9]/g,'');
+  if(correct) aMask|=(1<<i); else aMask&=~(1<<i);
+  $('#'+s.id+'verd').innerHTML=(correct?'<span class="ok">✓ correct</span>':'<span class="no">✗ not quite</span>')+
+    ` <span class="muted">— expected: ${s.answer}</span>`+
+    (predBeforeRun[s.id]?'':' <span class="wn">(predicted after running)</span>');
+}
+
+$('#runB').addEventListener('click',async()=>{
+  $('#bErr').textContent='';
+  let api; try{ api=buildAPI($('#bcode').value, SPEC.V1, SPEC.V2); }
+  catch(e){ $('#bErr').textContent='Syntax error: '+e.message; return; }
+  let res; try{ res=await checkB(api,SPEC.V1,SPEC.V2); }catch(e){ $('#bErr').textContent='Run error: '+e.message; return; }
+  lastB=res; bMask=0;
+  const labels={B1:'B1 getToken (GET)',B2:'B2 createItem (POST)',B3:'B3 updateItem (PATCH)',B4:'B4 deleteItem (DELETE)',B5:'B5 fetchWithRetry (503)'};
+  const wrap=$('#bChecks'); wrap.innerHTML=''; let n=0;
+  Object.keys(labels).forEach((k,i)=>{const ok=!!res[k]; if(ok){bMask|=(1<<i);n++;} const d=document.createElement('div');d.className='check';d.innerHTML=`<span class="dot ${ok?'ok':'no'}">${ok?'✓':'✕'}</span><span>${labels[k]}</span>`;wrap.appendChild(d);});
+  $('#bTally').textContent=n+' / 5';
+});
+
+function currentCode(){ const mask=((aMask&15)<<5)|(bMask&31); return genCode(SPEC.seed,mask); }
+$('#codeBtn').addEventListener('click',()=>{
+  const code=currentCode(); window.__code=code;
+  $('#codeOut').classList.remove('hidden');
+  $('#codeOut').innerHTML=`Completion code: <b>${code}</b><br><span class="muted">Round A ${popc(aMask&15)}/4 · Round B ${popc(bMask&31)}/5</span>`;
+});
+function popc(m){let c=0;while(m){c+=m&1;m>>>=1;}return c;}
+
+function doExport(auto){
+  if(!SPEC) return;
+  const g=id=>($$(id)?.value||'').trim();
+  let trace='--- INTEGRITY TELEMETRY ---\nTab left / hidden: '+awayCount+'x, ~'+Math.round(awayMs/1000)+'s total\n';
+  const fields=['A1pred','A1why','A2pred','A2why','A3pred','A3why','A4pred','A4why','bcode','c1','c2','c3'];
+  fields.forEach(id=>{const sg=fieldSignal(id);trace+=`  ${id.padEnd(7)} [${sg.tag}] ${sg.line}\n`;});
+  const pastes=fields.filter(id=>fieldSignal(id).pasted);
+  const predAfter=Object.keys(predBeforeRun).filter(k=>!predBeforeRun[k]);
+  const blockedTotal=fields.reduce((n,id)=>n+((TELE[id]&&TELE[id].blocked)||0),0);
+  trace+='FLAGS: '+([auto?'auto-submitted at time limit':'',pastes.length?pastes.length+' field(s) pasted':'',blockedTotal?blockedTotal+' blocked paste/drop attempt(s)':'',predAfter.length?'predicted-after-run: '+predAfter.join(','):'',awayCount>=3?'frequent tab-switching':''].filter(Boolean).join(' | ')||'none')+'\n';
+  const code=window.__code||currentCode(); window.__code=code;
+  const submittedAt=Date.now();
+  const elapsedMs=SESSION?submittedAt-SESSION.start:0;
+  const body=
+`==== REST API ASSESSMENT — SUBMISSION ====
+Name: ${window.__NAME||''}
+Session ID: ${SESSION?SESSION.sid:'(none)'}
+Started: ${SESSION?new Date(SESSION.start).toISOString():'(none)'}
+Submitted: ${new Date(submittedAt).toISOString()}${auto?' (auto, time limit)':''}
+Elapsed: ${fmt(Math.min(elapsedMs,DURATION))} / 90:00
+Completion code: ${code}
+
+[A1-why] ${g('A1why')}
+[A2-why] ${g('A2why')}
+[A3-why] ${g('A3why')}
+[A4-why] ${g('A4why')}
+
+[C1] ${g('c1')}
+[C2] ${g('c2')}
+[C3] ${g('c3')}
+
+${trace}==== END ====`;
+  const sig=signBody(SPEC.seed, body);
+  const block=body+'\nIntegrity signature: '+sig;
+  $('#exportOut').classList.remove('hidden'); $('#exportOut').textContent=block;
+  const safe=(window.__NAME||'submission').replace(/[^a-z0-9]+/gi,'_').toLowerCase();
+  try{ downloadBytes('rest-submission-'+safe+'.pdf', makePDF(block), 'application/pdf'); }catch(e){ flashNote('PDF download failed — copy the text block instead.'); }
+}
+$('#exportBtn').addEventListener('click',()=>doExport(false));
+
+$('#vBtn').addEventListener('click',()=>{
+  const r=verifyCode($('#vName').value,$('#vCode').value), o=$('#vOut');
+  if(r.error){o.innerHTML='<span class="no">Could not parse code.</span>';return;}
+  if(!r.seedMatch){o.innerHTML='<span class="no">✕ Seed does not match this name.</span>';return;}
+  if(!r.ok){o.innerHTML='<span class="no">✕ Integrity check failed — likely forged.</span>';return;}
+  o.innerHTML=`<span class="ok">✓ Valid for ${$('#vName').value}.</span> Round A passed: ${r.aBits.join(', ')||'none'} · Round B passed: ${r.bBits.join(', ')||'none'}.`;
+});
+$('#iBtn').addEventListener('click',()=>{
+  const o=$('#iOut'); const name=$('#iName').value.trim(); const text=$('#iText').value;
+  if(!name||!text.trim()){o.innerHTML='<span class="muted">Enter the name and paste the submission.</span>';return;}
+  const seed=seedFromName(name); const r=verifySigText(seed,text);
+  let html='';
+  if(!r.found){ html='<span class="no">No "Integrity signature" line found — not a generated submission, or it was deleted.</span>'; }
+  else if(r.ok){ html='<span class="ok">✓ MATCH — unchanged since '+name+' generated it.</span>'; }
+  else { html='<span class="no">✕ TAMPERED — edited after generation (or wrong name). Expected '+r.expected+', found '+r.got+'.</span>'; }
+  const sm=text.match(/Session ID:\s*([0-9a-z]+\.[0-9a-z]+\.[0-9a-z]+)/i);
+  if(sm){ const v=verifySession(name,sm[1]); html += '<br>'+(v.ok?('<span class="ok">✓ Session valid</span> — started '+v.start.toISOString()+' by '+name+'.'):'<span class="no">✕ Session ID does not match this name (or is forged).</span>'); }
+  o.innerHTML=html;
+});
+</script>
+</body>
+</html>
